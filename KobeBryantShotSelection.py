@@ -57,8 +57,17 @@ print(TrainShotsMadeNumerical.shape)
 
 TrainShotsDecoded = pd.read_csv('./FeatureOutput.csv', sep = ',', header = 0)
 print(TrainShotsDecoded.shape)
-X = pd.concat([TrainShotsDecoded, TrainShotsMadeNumerical], axis = 1)
-print(X.head(10))
-X.to_csv('CheckConcat.csv', sep = ',', header = True)
-plt.hist(ShotsMade['shot_zone_range'], color = 'green')
+#hstack(TrainShotsMade[NumericalVariable], TrainShotsMadeEncoded).tocsr()
+TrainShotsDecoded = TrainShotsDecoded.astype(int)
+chi2_features = SelectKBest(chi2, k = 4)
+BestFeatures = chi2_features.fit_transform(TrainShotsDecoded, TrainShotsMade[DependentVariable])
+print(BestFeatures)
+
+for i in CategoricalVariable:
+	TrainShotsMade[i] = TrainShotsDecoded[i]
+
+#plt.plot(TrainShotsMade['combined_shot_type'], TrainShotsMade['shot_made_flag'], 'o', color='black');
+#plt.hist(ShotsMade['shot_zone_range'], color = 'green')
+
+sns.boxplot(x = 'shot_made_flag', y = 'combined_shot_type', data = TrainShotsMade)
 plt.show()
