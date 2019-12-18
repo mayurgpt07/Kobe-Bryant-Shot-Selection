@@ -35,7 +35,6 @@ def generateVisual(train_data, inputCol, outputCol):
 	outputList = []
 	uniqueInputCol = train_data[inputCol].unique()
 	uniqueOutputCol = train_data[outputCol].unique()
-	print(uniqueInputCol, uniqueOutputCol)
 	for i in uniqueInputCol:
 		for j in uniqueOutputCol:
 			inputList.append(str(i) + ' ' + str(j))
@@ -51,27 +50,35 @@ def generateVisual(train_data, inputCol, outputCol):
 	plt.title('Number of Successful or Unsuccessful Shots based on '+inputCol)
 	plt.show()
 
+def secondsRemaning(train_data):
+	totalTimeinSec = 12*4*60
+	train_data['secondsTotal'] = train_data['minutes_remaining']*60 + train_data['seconds_remaining']
+
+	#train_data['Time']
+
+
+
 ShotsMade = pd.read_csv('./data.csv', sep = ',', header = 0)
-print(type(ShotsMade.loc[0,'game_date']))
 ShotsMade['DoubleDigitMinutes'] = ShotsMade['minutes_remaining'].apply(lambda x: format(x, '02')) 
 ShotsMade['DoubleDigitSeconds'] = ShotsMade['seconds_remaining'].apply(lambda x: format(x, '02'))
 
 ShotsMade['DateTimeinMinutes'] = ShotsMade['game_date'] + " " + "00:" + ShotsMade['DoubleDigitMinutes'] + ":" + ShotsMade['DoubleDigitSeconds']
-print(ShotsMade['DateTimeinMinutes'])
 ShotsMade['DateinFormat'] = ShotsMade['DateTimeinMinutes'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S').date())
 getPlacesFromLatandLong(ShotsMade)
-#print(ShotsMade.head(10))
-
-#print(ShotsMade['shot_made_flag'].unique())
+secondsRemaning(ShotsMade)
+print(ShotsMade['secondsTotal'].max(), ShotsMade['secondsTotal'].min())
 
 ValidationShotsMade = ShotsMade[pd.isnull(ShotsMade['shot_made_flag'])]
 TrainShotsMade = ShotsMade[pd.notnull(ShotsMade['shot_made_flag'])]
 
-#print("Shot Type Made", TrainShotsMade['shot_type'].unique())
-generateVisual(TrainShotsMade, 'shot_type', 'shot_made_flag')
-generateVisual(TrainShotsMade, 'shot_zone_area', 'shot_made_flag')
-generateVisual(TrainShotsMade, 'combined_shot_type', 'shot_made_flag')
 
+
+# generateVisual(TrainShotsMade, 'shot_type', 'shot_made_flag')
+# generateVisual(TrainShotsMade, 'shot_zone_area', 'shot_made_flag')
+# generateVisual(TrainShotsMade, 'combined_shot_type', 'shot_made_flag')
+# generateVisual(TrainShotsMade, 'shot_zone_basic', 'shot_made_flag')
+# generateVisual(TrainShotsMade, 'period', 'shot_made_flag')
+generateVisual(TrainShotsMade, 'period', 'shot_made_flag')
 
 CategoricalVariable = ['action_type','combined_shot_type','shot_type','shot_zone_area','shot_zone_basic','shot_zone_range', 'Location', 'opponent','playoffs','period']
 DependentVariable = ['shot_made_flag']
@@ -81,20 +88,21 @@ TrainShotsMadeEncoded = prepare_inputs(TrainShotsMade[CategoricalVariable])
 np.savetxt('FeatureOutput.csv', TrainShotsMadeEncoded, delimiter=',', header = 'action_type,combined_shot_type,shot_type,shot_zone_area,shot_zone_basic,shot_zone_range,Location,opponent,playoffs,period', fmt="%i", comments='')
 
 TrainShotsMadeNumerical = TrainShotsMade[NumericalVariable]
-print(TrainShotsMadeNumerical.shape)
 
 TrainShotsDecoded = pd.read_csv('./FeatureOutput.csv', sep = ',', header = 0)
-print(TrainShotsDecoded.shape)
-#hstack(TrainShotsMade[NumericalVariable], TrainShotsMadeEncoded).tocsr()
+
 TrainShotsDecoded = TrainShotsDecoded.astype(int)
-chi2_features = SelectKBest(chi2, k = 4)
+chi2_features = SelectKBest(chi2, k = 2)
 BestFeatures = chi2_features.fit_transform(TrainShotsDecoded, TrainShotsMade[DependentVariable])
-print(BestFeatures)
 
 for i in CategoricalVariable:
 	TrainShotsMade[i] = TrainShotsDecoded[i]
 
+TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['shot_type'], prefix = 'shot_type', prefix_sep = '@'))
+TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['playoffs'],  prefix = 'playoffs', prefix_sep = '@'))
+print(list(TrainShotsMade.columns))
+
 #plt.plot(TrainShotsMade['combined_shot_type'], TrainShotsMade['shot_made_flag'], 'o', color='black');
 #plt.hist(ShotsMade['shot_zone_range'], color = 'green')
-#sns.catplot(x = 'shot_made_flag', y = 'combined_shot_type', hue = 'shot_type' ,data = TrainShotsMade)
-#plt.show()
+sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
+plt.show()
