@@ -7,6 +7,9 @@ from datetime import datetime
 import seaborn as sns
 import reverse_geocoder as rgc
 import warnings
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn import model_selection
 from scipy.sparse import hstack
 
 #Create Locations From Latitude and Longitude
@@ -94,15 +97,32 @@ TrainShotsDecoded = pd.read_csv('./FeatureOutput.csv', sep = ',', header = 0)
 TrainShotsDecoded = TrainShotsDecoded.astype(int)
 chi2_features = SelectKBest(chi2, k = 2)
 BestFeatures = chi2_features.fit_transform(TrainShotsDecoded, TrainShotsMade[DependentVariable])
+print(BestFeatures)
 
 for i in CategoricalVariable:
 	TrainShotsMade[i] = TrainShotsDecoded[i]
 
 TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['shot_type'], prefix = 'shot_type', prefix_sep = '@'))
-TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['playoffs'],  prefix = 'playoffs', prefix_sep = '@'))
+TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['shot_zone_basic'],  prefix = 'shot_zone_basic', prefix_sep = '@'))
+TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['shot_zone_range'],  prefix = 'shot_zone_range', prefix_sep = '@'))
+TrainShotsMade = TrainShotsMade.join(pd.get_dummies(TrainShotsMade['shot_zone_area'],  prefix = 'shot_zone_area', prefix_sep = '@'))
 print(list(TrainShotsMade.columns))
 
 #plt.plot(TrainShotsMade['combined_shot_type'], TrainShotsMade['shot_made_flag'], 'o', color='black');
 #plt.hist(ShotsMade['shot_zone_range'], color = 'green')
 sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
 plt.show()
+
+IndependentVariables = ['shot_distance','secondsTotal', 'shot_type@0.0', 'shot_type@1.0', 'shot_zone_basic@0.0', 'shot_zone_basic@1.0', 'shot_zone_basic@2.0', 'shot_zone_basic@3.0', 'shot_zone_basic@4.0', 'shot_zone_basic@5.0', 'shot_zone_basic@6.0', 'shot_zone_range@0.0', 'shot_zone_range@1.0', 'shot_zone_range@2.0', 'shot_zone_range@3.0', 'shot_zone_range@4.0']
+
+X, y = TrainShotsMade[IndependentVariables], TrainShotsMade[DependentVariable]
+
+X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
+
+LogisticModel = LogisticRegression(penalty = 'l1', C = 0.5, solver = 'liblinear', max_iter = 2000)
+fittedLogisticModel = LogisticModel.fit(X_train, Y_train)
+print(model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 10))
+
+SupportVectorModel = SVC(kernel = 'linear', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
+FittedSVModel = SupportVectorModel.fit(X_train, Y_train)
+print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 10))
