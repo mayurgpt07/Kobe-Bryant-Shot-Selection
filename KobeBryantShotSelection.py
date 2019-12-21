@@ -119,10 +119,10 @@ X, y = TrainShotsMade[IndependentVariables], TrainShotsMade[DependentVariable]
 
 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
 
-LogisticModel = LogisticRegression(penalty = 'l1', C = 0.5, solver = 'liblinear', max_iter = 2000)
+LogisticModel = LogisticRegression(penalty = 'elasticnet', C = 0.5, solver = 'saga', max_iter = 4000, l1_ratio = 0.5)
 fittedLogisticModel = LogisticModel.fit(X_train, Y_train)
 print(model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 10))
 
-SupportVectorModel = SVC(kernel = 'linear', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
+SupportVectorModel = SVC(kernel = 'rbf', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
 FittedSVModel = SupportVectorModel.fit(X_train, Y_train)
-print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 10))
+print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3))
