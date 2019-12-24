@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.feature_selection import chi2, SelectKBest
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from datetime import datetime
 import seaborn as sns
 import reverse_geocoder as rgc
@@ -11,7 +11,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn import model_selection
 from scipy.sparse import hstack
-from sklearn.decomposition import PCA
+from sklearn.metrics import log_loss
+from sklearn.decomposition import PCA 
+from sklearn.ensemble import RandomForestClassifier
+
+#Clutch
+#Angle
+#Number of Actions in shot
 
 #Create Locations From Latitude and Longitude
 def getPlacesFromLatandLong(train_data):
@@ -58,7 +64,13 @@ def secondsRemaning(train_data):
 	totalTimeinSec = 12*4*60
 	train_data['secondsTotal'] = train_data['minutes_remaining']*60 + train_data['seconds_remaining']
 
+def logLoss(y_original, y_predicted):
+	return log_loss(y_original, y_predicted)
+
+#def clutchShotOrNot
 	#train_data['Time']
+
+#def numberOfActionsInShot
 
 
 
@@ -109,7 +121,7 @@ for i in CategoricalVariable:
 	print(len(tempList))
 	TrainShotsMadeLater.loc[:,i] = pd.Series(tempList, index = TrainShotsMadeLater.index)
 
-TrainShotsMadeLater.to_csv('Training.csv', sep = ',', header = True)
+#TrainShotsMadeLater.to_csv('Training.csv', sep = ',', header = True)
 print(TrainShotsMadeLater.shape)
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shot_type'], prefix = 'shot_type', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['combined_shot_type'], prefix = 'combined_shot_type', prefix_sep = '@'))
@@ -124,16 +136,26 @@ print(list(TrainShotsMadeLater.columns))
 #sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
 #plt.show()
 
-IndependentVariables = ['season','shot_distance','secondsTotal','period@0','period@1', 'period@2', 'period@3', 'period@4', 'period@5', 'period@6','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5', 'shot_zone_basic@0','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1', 'shot_zone_basic@0', 'shot_zone_basic@1', 'shot_zone_basic@2', 'shot_zone_basic@3', 'shot_zone_basic@4', 'shot_zone_basic@5', 'shot_zone_basic@6', 'shot_zone_range@0', 'shot_zone_range@1', 'shot_zone_range@2', 'shot_zone_range@3', 'shot_zone_range@4']
+IndependentVariables = ['loc_x','loc_y','shot_distance','secondsTotal','period@0','period@1', 'period@2', 'period@3', 'period@4', 'period@5', 'period@6','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5', 'shot_zone_basic@0','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1', 'shot_zone_basic@0', 'shot_zone_basic@1', 'shot_zone_basic@2', 'shot_zone_basic@3', 'shot_zone_basic@4', 'shot_zone_basic@5', 'shot_zone_basic@6', 'shot_zone_range@0', 'shot_zone_range@1', 'shot_zone_range@2', 'shot_zone_range@3', 'shot_zone_range@4']
 
 X, y = TrainShotsMadeLater[IndependentVariables], TrainShotsMadeLater[DependentVariable]
 
 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
 
-LogisticModel = LogisticRegression(penalty = 'elasticnet', C = 0.1, solver = 'saga', max_iter = 4000, l1_ratio = 0.5)
+LogisticModel = LogisticRegression(penalty = 'elasticnet', C = 0.1, solver = 'saga', max_iter = 5000, l1_ratio = 0.5)
 fittedLogisticModel = LogisticModel.fit(X_train, Y_train)
-print(model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 10), np.mean(model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 10)))
+Y_pred_prob = LogisticModel.predict_proba(X_train)
+print('Log Loss', logLoss(Y_train, Y_pred_prob))
+cvScoreLogistic = model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 5, scoring = 'neg_log_loss') 
+print(cvScoreLogistic, np.mean(cvScoreLogistic))
 
-SupportVectorModel = SVC(kernel = 'rbf', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
-FittedSVModel = SupportVectorModel.fit(X_train, Y_train)
-print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3), np.mean(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3)))
+RandomClassifier = RandomForestClassifier(max_depth=6, criterion = 'entropy', max_features = 'log2')
+fittedRandomClassfier = RandomClassifier.fit(X_train, Y_train)
+Y_pred_prob_RandomForest = RandomClassifier.predict_proba(X_train)
+print('Log Loss Random Forest', logLoss(Y_train, Y_pred_prob_RandomForest))
+cvScoreRandom = model_selection.cross_val_score(fittedRandomClassfier, X_train, Y_train, cv = 5, scoring = 'neg_log_loss') 
+print(cvScoreRandom, np.mean(cvScoreRandom))
+
+# SupportVectorModel = SVC(kernel = 'poly', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
+# FittedSVModel = SupportVectorModel.fit(X_train, Y_train)
+# print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3), np.mean(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3)))
