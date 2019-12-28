@@ -17,15 +17,13 @@ from sklearn.ensemble import RandomForestClassifier
 import warnings
 
 warnings.simplefilter('ignore')
-#Angle
 
 #Create Locations From Latitude and Longitude
 def getPlacesFromLatandLong(train_data):
-	#GeoLocation to be added into the picture. Try to convert Latitude and Longitude to names of places in Kings County Region
 	for i in range(0, len(train_data['lat'])):
 		coordiantes = (train_data.loc[i,'lat'], train_data.loc[i,'lon'])
-		#print(rgc.search(coordiantes, mode = 1))
 		train_data.loc[i, 'Location'] = rgc.search(coordiantes, mode = 1)[0].get('name')
+	train_data['HomeOrAway'] = train_data['Location'].apply(lambda x: 1 if x.strip().lower() == 'los angeles' else 0)
 
 #Select data to train based on data prior to that date itself
 def TrainModel(game_date, train_data):
@@ -80,6 +78,43 @@ def shotAngle(train_data):
 	for i in range(0, len(train_data['loc_x'])):
 		train_data.loc[i,'ShotAngle'] = math.atan2(-(train_data.loc[i,'loc_y']),train_data.loc[i,'loc_x'])/math.pi*180
 
+def conferenceTeams(train_data):
+	conferenceDictionary = {
+	'ATL':0,
+	'BKN':0,
+	'BOS':0,
+	'CHA':0,
+	'CHI':0,
+	'CLE':0,
+	'DAL':1,
+	'DEN':1,
+	'DET':0,
+	'GSW':1,
+	'HOU':1,
+	'IND':0,
+	'LAC':1,
+	'MEM':1,
+	'MIA':0,
+	'MIL':0,
+	'MIN':1,
+	'NJN':0,
+	'NOH':1,
+	'NOP':1,
+	'NYK':0,
+	'OKC':1,
+	'ORL':0,
+	'PHI':0,
+	'PHX':1,
+	'POR':1,
+	'SAC':1,
+	'SAS':1,
+	'SEA':1,
+	'TOR':0,
+	'UTA':1,
+	'VAN':1,
+	'WAS':0
+	}
+	train_data['Conference'] = train_data['opponent'].apply(lambda x: conferenceDictionary.get(x))
 
 ShotsMade = pd.read_csv('./data.csv', sep = ',', header = 0)
 ShotsMade['DoubleDigitMinutes'] = ShotsMade['minutes_remaining'].apply(lambda x: format(x, '02')) 
@@ -91,6 +126,7 @@ getPlacesFromLatandLong(ShotsMade)
 secondsRemaning(ShotsMade)
 numberOfActionsInShot(ShotsMade)
 shotAngle(ShotsMade)
+conferenceTeams(ShotsMade)
 print(ShotsMade['secondsTotal'].max(), ShotsMade['secondsTotal'].min())
 
 ValidationShotsMade = ShotsMade[pd.isnull(ShotsMade['shot_made_flag'])]
@@ -102,10 +138,9 @@ print('Training Data shape', TrainShotsMade.shape)
 # generateVisual(TrainShotsMade, 'combined_shot_type', 'shot_made_flag')
 # generateVisual(TrainShotsMade, 'shot_zone_basic', 'shot_made_flag')
 # generateVisual(TrainShotsMade, 'period', 'shot_made_flag')
-
 CategoricalVariable = ['action_type','combined_shot_type','shot_type','shot_zone_area','shot_zone_basic','shot_zone_range', 'Location', 'opponent','playoffs','period','season','ClutchOrNot']
 DependentVariable = ['shot_made_flag']
-NumericalVariable = ['game_event_id','game_id','lat','loc_x','loc_y','lon','minutes_remaining','seconds_remaining','shot_distance','secondsTotal','shot_made_flag','shot_id', 'NumberOfActions', 'ShotAngle']
+NumericalVariable = ['game_event_id','game_id','lat','loc_x','loc_y','lon','minutes_remaining','seconds_remaining','shot_distance','secondsTotal','shot_made_flag','shot_id', 'NumberOfActions', 'ShotAngle', 'HomeOrAway','Conference']
 
 TrainShotsMadeEncoded = prepare_inputs(TrainShotsMade[CategoricalVariable])
 print('Train Shots Encoded Size',TrainShotsMadeEncoded.shape)
@@ -135,54 +170,57 @@ print(TrainShotsMadeLater.shape)
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shot_type'], prefix = 'shot_type', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['combined_shot_type'], prefix = 'combined_shot_type', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shot_zone_basic'],  prefix = 'shot_zone_basic', prefix_sep = '@'))
-TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shot_zone_range'],  prefix = 'shot_zone_range', prefix_sep = '@'))
+#TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shot_zone_range'],  prefix = 'shot_zone_range', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['playoffs'], prefix = 'playoffs', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['period'], prefix = 'period', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['ClutchOrNot'], prefix = 'ClutchOrNot', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['NumberOfActions'], prefix = 'NumberOfActions', prefix_sep = '@'))
+TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['HomeOrAway'], prefix = 'HomeOrAway', prefix_sep = '@'))
+TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['Conference'], prefix = 'Conference', prefix_sep = '@'))
+
 print(list(TrainShotsMadeLater.columns))
+TrainShotsMadeLater['AgeOfKobeBrayant'] = TrainShotsMadeLater['season'].apply(lambda x: x + 17)
 
 #plt.plot(TrainShotsMade['combined_shot_type'], TrainShotsMade['shot_made_flag'], 'o', color='black');
 #plt.hist(ShotsMade['shot_zone_range'], color = 'green')
 #sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
 #plt.show()
 
-IndependentVariables = ['ShotAngle','shot_distance','secondsTotal', 'ClutchOrNot@0', 'ClutchOrNot@1', 'NumberOfActions@1', 'NumberOfActions@2', 'NumberOfActions@3', 'NumberOfActions@4','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5','period@0','period@1', 'period@2', 'period@3', 'period@4', 'period@5', 'period@6','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5', 'shot_zone_basic@0','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1', 'shot_zone_basic@0', 'shot_zone_basic@1', 'shot_zone_basic@2', 'shot_zone_basic@3', 'shot_zone_basic@4', 'shot_zone_basic@5', 'shot_zone_basic@6', 'shot_zone_range@0', 'shot_zone_range@1', 'shot_zone_range@2', 'shot_zone_range@3', 'shot_zone_range@4']
+IndependentVariables = ['AgeOfKobeBrayant','ShotAngle','shot_distance','secondsTotal','loc_x','loc_y', 'Conference@0', 'Conference@1','HomeOrAway@0', 'HomeOrAway@1','ClutchOrNot@0', 'ClutchOrNot@1', 'NumberOfActions@1', 'NumberOfActions@2', 'NumberOfActions@3', 'NumberOfActions@4','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1']
 
 TrainingDataFrame = TrainShotsMadeLater[pd.notnull(ShotsMade['shot_made_flag'])]
 TestingDataFrame = TrainShotsMadeLater[pd.isnull(ShotsMade['shot_made_flag'])]
 TestingDataFrameWithShotId = pd.DataFrame(columns = ['shot_id', 'shot_made_flag', 'shot_made_flag_2'])
 TestingDataFrameWithShotId['shot_id'] = TestingDataFrame['shot_id']
 
+#generateVisual(TrainingDataFrame, 'HomeOrAway', 'shot_made_flag')
+#generateVisual(TrainingDataFrame, 'Conference', 'shot_made_flag')
+
 
 X, y = TrainingDataFrame[IndependentVariables], TrainingDataFrame[DependentVariable]
 
 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
 
-LogisticModel = LogisticRegression(penalty = 'elasticnet', C = 0.1, solver = 'saga', max_iter = 5000, l1_ratio = 0.5)
+LogisticModel = LogisticRegression(C = 0.1, max_iter = 5000)
 fittedLogisticModel = LogisticModel.fit(X_train, Y_train)
 Y_pred_prob = LogisticModel.predict_proba(X_train)
 print('Log Loss', logLoss(Y_train, Y_pred_prob))
-#cvScoreLogistic = model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
-#cvLogisticValidation = model_selection.cross_val_score(fittedLogisticModel, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
+cvScoreLogistic = model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
+cvLogisticValidation = model_selection.cross_val_score(fittedLogisticModel, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
 print(len(fittedLogisticModel.predict(TestingDataFrame[IndependentVariables])))
 TestingDataFrameWithShotId['shot_made_flag'] = fittedLogisticModel.predict(TestingDataFrame[IndependentVariables])
 print(TestingDataFrame.shape, TestingDataFrameWithShotId['shot_made_flag'].shape)
-#print(cvScoreLogistic, np.mean(cvScoreLogistic))
-#print(cvLogisticValidation, np.mean(cvLogisticValidation))
+print(cvScoreLogistic, np.mean(cvScoreLogistic))
+print(cvLogisticValidation, np.mean(cvLogisticValidation))
 
 
-RandomClassifier = RandomForestClassifier(max_depth=8, criterion = 'entropy', max_features = 'sqrt')
+RandomClassifier = RandomForestClassifier(max_depth=8, criterion = 'entropy', max_features = 'log2')
 fittedRandomClassfier = RandomClassifier.fit(X_train, Y_train)
 Y_pred_prob_RandomForest = RandomClassifier.predict_proba(X_train)
 print('Log Loss Random Forest', logLoss(Y_train, Y_pred_prob_RandomForest))
-#cvScoreRandom = model_selection.cross_val_score(fittedRandomClassfier, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
-#cvRandomValidation = model_selection.cross_val_score(fittedRandomClassfier, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
+cvScoreRandom = model_selection.cross_val_score(fittedRandomClassfier, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
+cvRandomValidation = model_selection.cross_val_score(fittedRandomClassfier, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
 TestingDataFrameWithShotId['shot_made_flag_2'] = fittedRandomClassfier.predict(TestingDataFrame[IndependentVariables])
-#print(cvScoreRandom, np.mean(cvScoreRandom))
-#print(cvRandomValidation, np.mean(cvRandomValidation))
-
+print(cvScoreRandom, np.mean(cvScoreRandom))
+print(cvRandomValidation, np.mean(cvRandomValidation))
 TestingDataFrameWithShotId.to_csv('Predictions.csv', sep = ',', header = True)
-# SupportVectorModel = SVC(kernel = 'poly', C = 0.1, cache_size = 10000.0, decision_function_shape = 'ovo')
-# FittedSVModel = SupportVectorModel.fit(X_train, Y_train)
-# print(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3), np.mean(model_selection.cross_val_score(FittedSVModel, X_train, Y_train, cv = 3)))
