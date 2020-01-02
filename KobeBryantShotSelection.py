@@ -23,7 +23,7 @@ def getPlacesFromLatandLong(train_data):
 	for i in range(0, len(train_data['lat'])):
 		coordiantes = (train_data.loc[i,'lat'], train_data.loc[i,'lon'])
 		train_data.loc[i, 'Location'] = rgc.search(coordiantes, mode = 1)[0].get('name')
-	train_data['HomeOrAway'] = train_data['Location'].apply(lambda x: 1 if x.strip().lower() == 'los angeles' else 0)
+	train_data['HomeOrAway'] = train_data['matchup'].str.contains('vs').astype('int')
 
 #Select data to train based on data prior to that date itself
 def TrainModel(game_date, train_data):
@@ -75,8 +75,7 @@ def numberOfActionsInShot(train_data):
 	#print(train_data['NumberOfActions'])
 
 def shotAngle(train_data):
-	for i in range(0, len(train_data['loc_x'])):
-		train_data.loc[i,'ShotAngle'] = math.atan2(-(train_data.loc[i,'loc_y']),train_data.loc[i,'loc_x'])/math.pi*180
+	train_data['ShotAngle'] = train_data.apply(lambda row: 90 if row['loc_y']==0 else math.degrees(math.atan(row['loc_x']/abs(row['loc_y']))),axis=1)
 
 def conferenceTeams(train_data):
 	conferenceDictionary = {
@@ -122,6 +121,8 @@ ShotsMade['DoubleDigitSeconds'] = ShotsMade['seconds_remaining'].apply(lambda x:
 
 ShotsMade['DateTimeinMinutes'] = ShotsMade['game_date'] + " " + "00:" + ShotsMade['DoubleDigitMinutes'] + ":" + ShotsMade['DoubleDigitSeconds']
 ShotsMade['DateinFormat'] = ShotsMade['DateTimeinMinutes'].apply(lambda x: datetime.strptime(x, '%m/%d/%Y %H:%M:%S').date())
+ShotsMade['GameMonth'] = ShotsMade['DateinFormat'].apply(lambda x: x.month)
+ShotsMade['GameYear'] = ShotsMade['DateinFormat'].apply(lambda x: x.year)
 getPlacesFromLatandLong(ShotsMade)
 secondsRemaning(ShotsMade)
 numberOfActionsInShot(ShotsMade)
@@ -140,7 +141,7 @@ print('Training Data shape', TrainShotsMade.shape)
 # generateVisual(TrainShotsMade, 'period', 'shot_made_flag')
 CategoricalVariable = ['action_type','combined_shot_type','shot_type','shot_zone_area','shot_zone_basic','shot_zone_range', 'Location', 'opponent','playoffs','period','season','ClutchOrNot']
 DependentVariable = ['shot_made_flag']
-NumericalVariable = ['game_event_id','game_id','lat','loc_x','loc_y','lon','minutes_remaining','seconds_remaining','shot_distance','secondsTotal','shot_made_flag','shot_id', 'NumberOfActions', 'ShotAngle', 'HomeOrAway','Conference']
+NumericalVariable = ['game_event_id','game_id','lat','loc_x','loc_y','lon','minutes_remaining','seconds_remaining','shot_distance','secondsTotal','shot_made_flag','shot_id', 'NumberOfActions', 'ShotAngle', 'HomeOrAway','Conference','GameMonth']
 
 TrainShotsMadeEncoded = prepare_inputs(TrainShotsMade[CategoricalVariable])
 print('Train Shots Encoded Size',TrainShotsMadeEncoded.shape)
@@ -177,6 +178,7 @@ TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLate
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['NumberOfActions'], prefix = 'NumberOfActions', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['HomeOrAway'], prefix = 'HomeOrAway', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['Conference'], prefix = 'Conference', prefix_sep = '@'))
+TrainShotsMadeLater['Log_ShotDistance'] = TrainShotsMadeLater['shot_distance'].apply(lambda x: np.cbrt(x))
 
 print(list(TrainShotsMadeLater.columns))
 TrainShotsMadeLater['AgeOfKobeBrayant'] = TrainShotsMadeLater['season'].apply(lambda x: x + 17)
@@ -186,7 +188,7 @@ TrainShotsMadeLater['AgeOfKobeBrayant'] = TrainShotsMadeLater['season'].apply(la
 #sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
 #plt.show()
 
-IndependentVariables = ['AgeOfKobeBrayant','ShotAngle','shot_distance','secondsTotal','loc_x','loc_y', 'Conference@0', 'Conference@1','HomeOrAway@0', 'HomeOrAway@1','ClutchOrNot@0', 'ClutchOrNot@1', 'NumberOfActions@1', 'NumberOfActions@2', 'NumberOfActions@3', 'NumberOfActions@4','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1']
+IndependentVariables = ['GameMonth','AgeOfKobeBrayant','ShotAngle','Log_ShotDistance','secondsTotal','loc_x','loc_y', 'Conference@0', 'Conference@1','HomeOrAway@0', 'HomeOrAway@1','ClutchOrNot@0', 'ClutchOrNot@1', 'NumberOfActions@1', 'NumberOfActions@2', 'NumberOfActions@3', 'NumberOfActions@4','combined_shot_type@0', 'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1']
 
 TrainingDataFrame = TrainShotsMadeLater[pd.notnull(ShotsMade['shot_made_flag'])]
 TestingDataFrame = TrainShotsMadeLater[pd.isnull(ShotsMade['shot_made_flag'])]
@@ -198,10 +200,23 @@ TestingDataFrameWithShotId['shot_id'] = TestingDataFrame['shot_id']
 
 
 X, y = TrainingDataFrame[IndependentVariables], TrainingDataFrame[DependentVariable]
-
+plt.hist(X['Log_ShotDistance'], color = 'green')
+plt.show()
+plt.hist(X['secondsTotal'], color = 'red')
+plt.show()
+plt.hist(X['AgeOfKobeBrayant'], color = 'red')
+plt.show()
 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
 
-LogisticModel = LogisticRegression(C = 0.1, max_iter = 5000)
+# parameters = {'penalty': ['l1', 'l2', 'elasticnet', 'none'], 'C' : [0.1,0.2,0.4,0.7,0.9,0.01,0.05], 'solver': ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'], 'multi_class': ['ovr', 'multinomial'], 'l1_ratio': [0.1,0.2,0.4,0.7,0.9,0.01,0.05]}
+# RandomClassifier = LogisticRegression()
+# clf = model_selection.GridSearchCV(RandomClassifier, parameters)
+# clf.fit(X_train, Y_train)
+# print(sorted(clf.cv_results_.keys()))
+# print(clf.best_estimator_)
+# print(clf.best_params_)
+
+LogisticModel = LogisticRegression(C = 0.1, penalty = 'l1', solver = 'liblinear', max_iter = 5000)
 fittedLogisticModel = LogisticModel.fit(X_train, Y_train)
 Y_pred_prob = LogisticModel.predict_proba(X_train)
 print('Log Loss', logLoss(Y_train, Y_pred_prob))
@@ -232,7 +247,18 @@ print(cvScoreLogistic, np.mean(cvScoreLogistic))
 print(cvLogisticValidation, np.mean(cvLogisticValidation))
 
 
-RandomClassifier = RandomForestClassifier(max_depth=8, criterion = 'entropy', max_features = 'log2')
+# parameters = {'max_depth': [2,4,6,8,10,12,14], 'criterion' : ['entropy', 'gini'], 'max_features': ['log2', 'sqrt']}
+# RandomClassifier = RandomForestClassifier()
+# clf = model_selection.GridSearchCV(RandomClassifier, parameters)
+# clf.fit(X_train, Y_train)
+# print(sorted(clf.cv_results_.keys()))
+# print(clf.best_estimator_)
+# print(clf.best_params_)
+
+#RandomClassifier = RandomForestClassifier(max_depth=6, criterion = 'entropy', max_features = 'sqrt')
+RandomClassifier = RandomForestClassifier(max_depth=8, criterion = 'gini', max_features = 'log2')
+
+
 fittedRandomClassfier = RandomClassifier.fit(X_train, Y_train)
 Y_pred_prob_RandomForest = RandomClassifier.predict_proba(X_train)
 print('Log Loss Random Forest', logLoss(Y_train, Y_pred_prob_RandomForest))
