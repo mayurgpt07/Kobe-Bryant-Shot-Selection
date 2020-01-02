@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn import model_selection
 from scipy.sparse import hstack
-from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss, confusion_matrix, roc_curve, auc
 from sklearn.decomposition import PCA 
 from sklearn.ensemble import RandomForestClassifier
 import warnings
@@ -72,7 +72,7 @@ def logLoss(y_original, y_predicted):
 
 def numberOfActionsInShot(train_data):
 	train_data['NumberOfActions'] = train_data['action_type'].apply(lambda x: len(x.strip().split(" "))-1)
-	print(train_data['NumberOfActions'])
+	#print(train_data['NumberOfActions'])
 
 def shotAngle(train_data):
 	for i in range(0, len(train_data['loc_x'])):
@@ -207,6 +207,24 @@ Y_pred_prob = LogisticModel.predict_proba(X_train)
 print('Log Loss', logLoss(Y_train, Y_pred_prob))
 cvScoreLogistic = model_selection.cross_val_score(fittedLogisticModel, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
 cvLogisticValidation = model_selection.cross_val_score(fittedLogisticModel, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
+Y_predicted = fittedLogisticModel.predict(X_test)
+tn, fp, fn, tp = confusion_matrix(Y_test, Y_predicted).ravel()
+sensitivity = tp/(tp+fn) 
+Specificity = tn/(tn+fp)
+fpr, tpr, threshold = roc_curve(Y_test, Y_predicted)
+rc_auc = auc(fpr, tpr)
+plt.title('Receiver Operating Characteristic')
+plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % rc_auc)
+plt.legend(loc = 'lower right')
+plt.plot([0, 1], [0, 1],'r--')
+plt.xlim([0, 1])
+plt.ylim([0, 1])
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+print('True Negative',tn, 'False Positive',fp, 'False Negative',fn, 'True Positive',tp)
+print('Sensitivity', sensitivity, 'Specificity', Specificity)
+print('True Negative',tn, 'False Positive',fp, 'False Negative',fn, 'True Positive',tp)
 print(len(fittedLogisticModel.predict(TestingDataFrame[IndependentVariables])))
 TestingDataFrameWithShotId['shot_made_flag'] = fittedLogisticModel.predict(TestingDataFrame[IndependentVariables])
 print(TestingDataFrame.shape, TestingDataFrameWithShotId['shot_made_flag'].shape)
@@ -220,6 +238,23 @@ Y_pred_prob_RandomForest = RandomClassifier.predict_proba(X_train)
 print('Log Loss Random Forest', logLoss(Y_train, Y_pred_prob_RandomForest))
 cvScoreRandom = model_selection.cross_val_score(fittedRandomClassfier, X_train, Y_train, cv = 5, scoring = 'neg_log_loss')
 cvRandomValidation = model_selection.cross_val_score(fittedRandomClassfier, X_test, Y_test, cv = 5, scoring = 'neg_log_loss')
+Y_predicted_random = fittedRandomClassfier.predict(X_test)
+tn, fp, fn, tp = confusion_matrix(Y_test, Y_predicted_random).ravel()
+sensitivity = tp/(tp+fn) 
+Specificity = tn/(tn+fp)
+fpr, tpr, threshold = roc_curve(Y_test, Y_predicted_random)
+rc_auc = auc(fpr, tpr)
+plt.title('Receiver Operating Characteristic')
+plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % rc_auc)
+plt.legend(loc = 'lower right')
+plt.plot([0, 1], [0, 1],'r--')
+plt.xlim([0, 1])
+plt.ylim([0, 1])
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+print('True Negative',tn, 'False Positive',fp, 'False Negative',fn, 'True Positive',tp)
+print('Sensitivity', sensitivity, 'Specificity', Specificity)
 TestingDataFrameWithShotId['shot_made_flag_2'] = fittedRandomClassfier.predict(TestingDataFrame[IndependentVariables])
 print(cvScoreRandom, np.mean(cvScoreRandom))
 print(cvRandomValidation, np.mean(cvRandomValidation))
