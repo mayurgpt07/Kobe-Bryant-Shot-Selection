@@ -20,9 +20,6 @@ warnings.simplefilter('ignore')
 
 #Create Locations From Latitude and Longitude
 def getPlacesFromLatandLong(train_data):
-	# for i in range(0, len(train_data['lat'])):
-	# 	coordiantes = (train_data.loc[i,'lat'], train_data.loc[i,'lon'])
-	# 	train_data.loc[i, 'Location'] = rgc.search(coordiantes, mode = 1)[0].get('name')
 	train_data['HomeOrAway'] = train_data['matchup'].str.contains('vs').astype('int')
 
 def createShortType(train_data):
@@ -80,6 +77,11 @@ def numberOfActionsInShot(train_data):
 
 def shotAngle(train_data):
 	train_data['ShotAngle'] = train_data.apply(lambda row: 90 if row['loc_y']==0 else math.degrees(math.atan(row['loc_x']/abs(row['loc_y']))),axis=1)
+	train_data['Angle_Bin'] = pd.cut(train_data.ShotAngle, 7, labels = range(7))
+	train_data['Angle_Bin'] = train_data.Angle_Bin.astype(int)
+
+def shotDistance(train_data):
+	train_data['shotClass'] = pd.cut(train_data.shot_distance, 7, labels = range(7))
 
 def conferenceTeams(train_data):
 	conferenceDictionary = {
@@ -133,6 +135,7 @@ createShortType(ShotsMade)
 numberOfActionsInShot(ShotsMade)
 shotAngle(ShotsMade)
 conferenceTeams(ShotsMade)
+shotDistance(ShotsMade)
 print(ShotsMade['secondsTotal'].max(), ShotsMade['secondsTotal'].min())
 
 ValidationShotsMade = ShotsMade[pd.isnull(ShotsMade['shot_made_flag'])]
@@ -140,17 +143,13 @@ TrainShotsMade = ShotsMade#ShotsMade[pd.notnull(ShotsMade['shot_made_flag'])]
 print('Training Data shape', TrainShotsMade.shape)
 
 # generateVisual(TrainShotsMade, 'shot_type', 'shot_made_flag')
-# generateVisual(TrainShotsMade, 'shot_zone_area', 'shot_made_flag')
-# generateVisual(TrainShotsMade, 'combined_shot_type', 'shot_made_flag')
-# generateVisual(TrainShotsMade, 'shot_zone_basic', 'shot_made_flag')
-# generateVisual(TrainShotsMade, 'period', 'shot_made_flag')
-CategoricalVariable = ['action_type','combined_shot_type','shot_type','shot_zone_area','shot_zone_basic','shot_zone_range', 'opponent','playoffs','period','season','ClutchOrNot','GameMonth']
+CategoricalVariable = ['action_type','combined_shot_type','shot_type','shot_zone_area','shot_zone_basic','shot_zone_range', 'opponent','playoffs','period','season','ClutchOrNot','GameMonth','Angle_Bin','GameYear', 'shotClass']
 DependentVariable = ['shot_made_flag']
 NumericalVariable = ['game_event_id','game_id','lat','loc_x','loc_y','lon','minutes_remaining','seconds_remaining','shot_distance','secondsTotal','shot_made_flag','shot_id', 'NumberOfActions', 'ShotAngle', 'HomeOrAway','Conference']
 
 TrainShotsMadeEncoded = prepare_inputs(TrainShotsMade[CategoricalVariable])
 print('Train Shots Encoded Size',TrainShotsMadeEncoded.shape)
-np.savetxt('FeatureOutput.csv', TrainShotsMadeEncoded, delimiter=',', header = 'action_type,combined_shot_type,shot_type,shot_zone_area,shot_zone_basic,shot_zone_range,opponent,playoffs,period,season,ClutchOrNot,GameMonth', fmt="%i", comments='')
+np.savetxt('FeatureOutput.csv', TrainShotsMadeEncoded, delimiter=',', header = 'action_type,combined_shot_type,shot_type,shot_zone_area,shot_zone_basic,shot_zone_range,opponent,playoffs,period,season,ClutchOrNot,GameMonth,Angle_Bin,GameYear,shotClass', fmt="%i", comments='')
 
 TrainShotsMadeNumerical = TrainShotsMade[NumericalVariable]
 
@@ -186,27 +185,34 @@ TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLate
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['HomeOrAway'], prefix = 'HomeOrAway', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['Conference'], prefix = 'Conference', prefix_sep = '@'))
 TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['GameMonth'], prefix = 'GameMonth', prefix_sep = '@'))
-TrainShotsMadeLater['Log_ShotDistance'] = TrainShotsMadeLater['shot_distance'].apply(lambda x: np.cbrt(x))
-TrainShotsMadeLater['Log_secondsTotal'] = TrainShotsMadeLater['secondsTotal'].apply(lambda x: np.cbrt(x))
+TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['Angle_Bin'], prefix = 'Angle_Bin', prefix_sep = '@'))
+TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['GameYear'], prefix = 'GameYear', prefix_sep = '@'))
+TrainShotsMadeLater = TrainShotsMadeLater.join(pd.get_dummies(TrainShotsMadeLater['shotClass'], prefix = 'shotClass', prefix_sep = '@'))
+#TrainShotsMadeLater['Log_ShotDistance'] = TrainShotsMadeLater['shot_distance'].apply(lambda x: np.cbrt(x))
+#TrainShotsMadeLater['Log_secondsTotal'] = TrainShotsMadeLater['secondsTotal'].apply(lambda x: np.cbrt(x))
 print(list(TrainShotsMadeLater.columns))
 TrainShotsMadeLater['AgeOfKobeBrayant'] = TrainShotsMadeLater['season'].apply(lambda x: x + 17)
-
+print(TrainShotsMadeLater['season'].head(5),TrainShotsMadeLater['AgeOfKobeBrayant'].head(5))
 #plt.plot(TrainShotsMade['combined_shot_type'], TrainShotsMade['shot_made_flag'], 'o', color='black');
 #plt.hist(ShotsMade['shot_zone_range'], color = 'green')
 #sns.catplot(x = 'shot_made_flag', y = 'secondsTotal',hue = 'period',data = TrainShotsMade)
 #plt.show()
+
+#'AgeOfKobeBrayant','ShotAngle','shot_distance','secondsTotal','loc_x','loc_y',
 
 IndependentVariables = ['action_type@0', 'action_type@1', 'action_type@2', 'action_type@3', 'action_type@4', 'action_type@5', 'action_type@6', 
 	'action_type@7', 'action_type@8', 'action_type@9', 'action_type@10', 'action_type@11', 'action_type@12', 'action_type@13', 'action_type@14', 'action_type@15', 
 	'action_type@16', 'action_type@17', 'action_type@18', 'action_type@19', 'action_type@20', 'action_type@21', 'action_type@22', 'action_type@23', 'action_type@24', 
 	'action_type@25', 'action_type@26', 'action_type@27', 'action_type@28', 'action_type@29', 'action_type@30', 'action_type@31', 'action_type@32', 'action_type@33', 
 	'action_type@34', 'action_type@35', 'action_type@36', 'action_type@37','GameMonth@0', 'GameMonth@1', 'GameMonth@2', 'GameMonth@3', 'GameMonth@4', 'GameMonth@5', 
-	'GameMonth@6', 'GameMonth@7', 'GameMonth@8','AgeOfKobeBrayant','ShotAngle','Log_ShotDistance','Log_secondsTotal','loc_x','loc_y', 'Conference@0', 'Conference@1',
+	'GameMonth@6', 'GameMonth@7', 'GameMonth@8','AgeOfKobeBrayant','shot_distance','secondsTotal', 'Conference@0', 'Conference@1',
 	'HomeOrAway@0', 'HomeOrAway@1','ClutchOrNot@0', 'ClutchOrNot@1', 'NumberOfActions@1', 'NumberOfActions@2', 'NumberOfActions@3', 'NumberOfActions@4','combined_shot_type@0', 
 	'combined_shot_type@1', 'combined_shot_type@2', 'combined_shot_type@3', 'combined_shot_type@4', 'combined_shot_type@5','playoffs@0','playoffs@1','shot_type@0', 'shot_type@1',
 	'shot_zone_basic@0', 'shot_zone_basic@1', 'shot_zone_basic@2', 'shot_zone_basic@3', 'shot_zone_basic@4', 'shot_zone_basic@5', 'shot_zone_basic@6', 'shot_zone_range@0', 
 	'shot_zone_range@1', 'shot_zone_range@2', 'shot_zone_range@3', 'shot_zone_range@4', 'shot_zone_area@0', 'shot_zone_area@1', 'shot_zone_area@2', 'shot_zone_area@3', 
-	'shot_zone_area@4', 'shot_zone_area@5']
+	'shot_zone_area@4', 'shot_zone_area@5','Angle_Bin@0', 'Angle_Bin@1', 'Angle_Bin@2', 'Angle_Bin@3', 'Angle_Bin@4', 'Angle_Bin@5', 'Angle_Bin@6', 'GameYear@0', 'GameYear@1',
+	'GameYear@2', 'GameYear@3', 'GameYear@4', 'GameYear@5', 'GameYear@6', 'GameYear@7', 'GameYear@8', 'GameYear@9', 'GameYear@10', 'GameYear@11', 'GameYear@12', 'GameYear@13', 
+	'GameYear@14', 'GameYear@15', 'GameYear@16', 'GameYear@17', 'GameYear@18', 'GameYear@19', 'GameYear@20', 'shotClass@0', 'shotClass@1', 'shotClass@2', 'shotClass@3', 'shotClass@4', 'shotClass@5', 'shotClass@6']
 
 TrainingDataFrame = TrainShotsMadeLater[pd.notnull(ShotsMade['shot_made_flag'])]
 TestingDataFrame = TrainShotsMadeLater[pd.isnull(ShotsMade['shot_made_flag'])]
@@ -218,12 +224,6 @@ TestingDataFrameWithShotId['shot_id'] = TestingDataFrame['shot_id']
 
 
 X, y = TrainingDataFrame[IndependentVariables], TrainingDataFrame[DependentVariable]
-plt.hist(X['Log_ShotDistance'], color = 'green')
-plt.show()
-plt.hist(X['Log_secondsTotal'], color = 'red')
-plt.show()
-plt.hist(X['AgeOfKobeBrayant'], color = 'red')
-plt.show()
 X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, y, test_size = 0.33)
 
 # parameters = {'penalty': ['l1', 'l2', 'elasticnet', 'none'], 'C' : [0.1,0.2,0.4,0.7,0.9,0.01,0.05], 'solver': ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'], 'multi_class': ['ovr', 'multinomial'], 'l1_ratio': [0.1,0.2,0.4,0.7,0.9,0.01,0.05]}
