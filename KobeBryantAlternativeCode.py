@@ -1,13 +1,9 @@
 #importing
 import pandas as pd
-
 from sklearn import model_selection
 import numpy as np
-
 from sklearn.preprocessing import LabelEncoder
-
 from sklearn.feature_extraction.text import CountVectorizer
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -17,12 +13,8 @@ pd.options.display.max_columns = 50
 import warnings
 
 warnings.filterwarnings('ignore')
-
 import sklearn.metrics as metrics
-
-
 from sklearn.ensemble import  RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier, AdaBoostClassifier
-#import xgboost
 import math as m
 
 
@@ -141,7 +133,7 @@ plt.xticks(rotation='vertical')
 #plt.show()
 
 #getting combined data for feature transformation.
-#df = pd.read_csv('../input/data.csv')
+df = pd.read_csv('./data.csv')
 
 #The angle from which the shot was made.
 df['angle'] = df.apply(lambda row: 90 if row['loc_y']==0 else m.degrees(m.atan(row['loc_x']/abs(row['loc_y']))),axis=1)
@@ -205,7 +197,6 @@ print('Final Columns',df.columns)
 predictors = df.columns.drop(['game_event_id' #unique
                               , 'shot_made_flag'
                               , 'game_id' #unique
-                              , 'shot_id' # id feature
                               , 'game_date'#other faetures from date used
                               , 'minutes_remaining'#transformed
                               , 'seconds_remaining'#transformed
@@ -229,9 +220,10 @@ for col in predictors:
 
 #seperating train and test set
 df_test = df.loc[pd.isnull(df['shot_made_flag'])]
-df_test.index = range(len(df_test))
 
-print('Dataframe To test',df_test)
+df_test.index = range(len(df_test))
+print(list(df_test.columns))
+
 
 df.dropna(inplace=True)
 
@@ -281,10 +273,12 @@ print(cvScoreAda, np.mean(cvScoreAda))
 print(cvAdaValidation, np.mean(cvAdaValidation))
 
 print(df_test[predictors])
-df_test['shot_made_flag'] = AdaBoostClassifier.predict(df_test[predictors])
-print(df_test['shot_id','shot_made_flag'].head())
+df_test['shot_made_flag'] = pd.Series(AdaBoostClassifier.predict(df_test[predictors]))
+print(df_test.index)
+df_test.loc[:,['shot_id', 'shot_made_flag']].to_csv('late_submission.csv', index = False)
 
-df_test['shot_id','shot_made_flag'].to_csv('late_submission.csv', index = False)
+
+#df_test['shot_id','shot_made_flag'].to_csv('late_submission.csv', index = False)
 # #5-fold cross validation
 # def run_test(predictors):
 #     all_score = []
