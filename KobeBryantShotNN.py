@@ -107,11 +107,14 @@ model = create_model(train, features)
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 es = callbacks.EarlyStopping(monitor='val_auc', min_delta=0.001, patience=5,verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-rlr = callbacks.ReduceLROnPlateau(monitor='auc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
+rlr = callbacks.ReduceLROnPlateau(monitor='acc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
 
 #print(train.loc[:,trainFeatures].to_numpy())
 
 X_train = [train.loc[:, features].values[:, k] for k in range(train.loc[:, features].values.shape[1])]
-#X_test = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
+X_test = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
 
-model.fit(X_train, utils.to_categorical(train.shot_made_flag.values),batch_size = 1024, epochs = 20, callbacks = [rlr])
+model.fit(X_train, utils.to_categorical(train.shot_made_flag.values),batch_size = 1024, epochs = 50, callbacks = [rlr])
+values = model.predict(X_test, batch_size = 1024, callbacks = [rlr])
+
+print(values)
