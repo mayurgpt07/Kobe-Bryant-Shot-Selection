@@ -47,11 +47,11 @@ def create_model(data, catcols):
     x = layers.Concatenate()(outputs)
     x = layers.BatchNormalization()(x)
     
-    x = layers.Dense(300, activation="relu")(x)
+    x = layers.Dense(512, activation="relu")(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
     
-    x = layers.Dense(300, activation="relu")(x)
+    x = layers.Dense(512, activation="relu")(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
     
@@ -92,17 +92,26 @@ totalKobeData = kobeData[predictors]
 
 
 features = list(totalKobeData.columns)
+features.remove('shot_made_flag')
 
 for feat in features:
 	lbl_enc = preprocessing.LabelEncoder()
 	totalKobeData[feat] = lbl_enc.fit_transform(totalKobeData[feat].astype(str).fillna("-1").values)
 
-train = totalKobeData.loc[totalKobeData.shot_made_flag != 2].reset_index(drop=True)
-test = totalKobeData.loc[totalKobeData.shot_made_flag == 2].reset_index(drop=True)
+
+train = totalKobeData.loc[pd.notnull(totalKobeData['shot_made_flag'])].reset_index(drop=True)
+test = totalKobeData.loc[pd.isnull(totalKobeData['shot_made_flag'])].reset_index(drop=True)
 
 model = create_model(train, features)
-print(model.summary())
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=[auc])
+#print(model.summary())
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 es = callbacks.EarlyStopping(monitor='val_auc', min_delta=0.001, patience=5,verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-rlr = callbacks.ReduceLROnPlateau(monitor='val_auc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
+rlr = callbacks.ReduceLROnPlateau(monitor='auc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
+
+#print(train.loc[:,trainFeatures].to_numpy())
+
+X_train = [train.loc[:, features].values[:, k] for k in range(train.loc[:, features].values.shape[1])]
+#X_test = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
+
+model.fit(X_train, utils.to_categorical(train.shot_made_flag.values),batch_size = 1024, epochs = 20, callbacks = [rlr])
