@@ -21,7 +21,7 @@ import math as m
 def auc(y_true, y_pred):
     def fallback_auc(y_true, y_pred):
         try:
-            return metrics.roc_auc_score(y_true, y_pred)
+            return metrics.log_loss(y_true, y_pred)
         except:
             return 0.5
     return tf.py_function(fallback_auc, (y_true, y_pred), tf.double)
@@ -33,7 +33,7 @@ def create_model(data, catcols):
     for c in catcols:
         print(c)
         num_unique_values = int(data[c].nunique())
-        embed_dim = int(min(np.ceil((num_unique_values)/2), 50))
+        embed_dim = int(min(np.ceil((num_unique_values)/2), 70))
         inp = layers.Input(shape=(1,))
         print(inp.shape)
         print(num_unique_values)
@@ -47,10 +47,23 @@ def create_model(data, catcols):
     x = layers.Concatenate()(outputs)
     x = layers.BatchNormalization()(x)
     
+    x = layers.Dense(1024, activation="relu")(x)
+    x = layers.Dropout(0.3)(x)
+    x = layers.BatchNormalization()(x)
+
+    x = layers.Dense(1024, activation="relu")(x)
+    x = layers.Dropout(0.3)(x)
+    x = layers.BatchNormalization()(x)
+
+    x = layers.Dense(1024, activation="relu")(x)
+    x = layers.Dropout(0.3)(x)
+    x = layers.BatchNormalization()(x)
+    
     x = layers.Dense(512, activation="relu")(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
     
+
     x = layers.Dense(512, activation="relu")(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
@@ -58,10 +71,10 @@ def create_model(data, catcols):
     y = layers.Dense(2, activation="softmax")(x)
     
     model = Model(inputs=inputs, outputs=y)
-    print(model.summary())
     return model
 
 kobeData = pd.read_csv('./data.csv')
+sampleSubmission = pd.read_csv('./sample_submission.csv')
 kobeData['angle'] = kobeData.apply(lambda row: 90 if row['loc_y']==0 else m.degrees(m.atan(row['loc_x']/abs(row['loc_y']))),axis=1)
 kobeData['angle_bin'] = pd.cut(kobeData.angle, 7, labels=range(7))
 kobeData['angle_bin'] = kobeData.angle_bin.astype(int)
@@ -101,20 +114,60 @@ for feat in features:
 
 train = totalKobeData.loc[pd.notnull(totalKobeData['shot_made_flag'])].reset_index(drop=True)
 test = totalKobeData.loc[pd.isnull(totalKobeData['shot_made_flag'])].reset_index(drop=True)
+test_data = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
 
-model = create_model(train, features)
-#print(model.summary())
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-es = callbacks.EarlyStopping(monitor='val_auc', min_delta=0.001, patience=5,verbose=1, mode='max', baseline=None, restore_best_weights=True)
+oof_preds = np.zeros((len(train)))
+test_preds = np.zeros((len(test)))
 
-rlr = callbacks.ReduceLROnPlateau(monitor='acc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
+skf = StratifiedKFold(n_splits=20)
+for train_index, test_index in skf.split(train, train.shot_made_flag.values):
+	X_train, X_test = train.iloc[train_index, :], train.iloc[test_index, :]
+	X_train = X_train.reset_index(drop=True)
+	X_test = X_test.reset_index(drop=True)
+	y_train, y_test = X_train.shot_made_flag.values, X_test.shot_made_flag.values
+	model = create_model(train, features)
+	model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-#print(train.loc[:,trainFeatures].to_numpy())
+	X_train = [X_train.loc[:, features].values[:, k] for k in range(X_train.loc[:, features].values.shape[1])]
+	X_test = [X_test.loc[:, features].values[:, k] for k in range(X_test.loc[:, features].values.shape[1])]
+	
+	es = callbacks.EarlyStopping(monitor='acc', min_delta=0.001, patience=5,
+                                 verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-X_train = [train.loc[:, features].values[:, k] for k in range(train.loc[:, features].values.shape[1])]
-X_test = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
+	rlr = callbacks.ReduceLROnPlateau(monitor='acc', factor=0.5,
+                                      patience=3, min_lr=1e-6, mode='max', verbose=1)
+    
+	model.fit(X_train,
+              utils.to_categorical(y_train),
+              validation_data=(X_test, utils.to_categorical(y_test)),
+              verbose=1,
+              batch_size=1024,
+              callbacks=[es, rlr],
+              epochs=25
+             )
+	valid_fold_preds = model.predict(X_test)[:, 1]
+	test_fold_preds = model.predict(test_data)[:, 1]
+	print(len(test_fold_preds))
+	sampleSubmission['shot_made_flag'] = np.argmax(model.predict(test_data), axis = 1)
+	oof_preds[test_index] = valid_fold_preds.ravel()
+	test_preds += test_fold_preds.ravel()
+	print(metrics.log_loss(y_test, valid_fold_preds))
+	K.clear_session()
 
-model.fit(X_train, utils.to_categorical(train.shot_made_flag.values),batch_size = 1024, epochs = 50, callbacks = [rlr])
-values = model.predict(X_test, batch_size = 1024, callbacks = [rlr])
+sampleSubmission.to_csv('SampleSubmission.csv')
+# model = create_model(train, features)
+# #print(model.summary())
+# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+# es = callbacks.EarlyStopping(monitor='val_auc', min_delta=0.001, patience=5,verbose=1, mode='max', baseline=None, restore_best_weights=True)
 
-print(values)
+# rlr = callbacks.ReduceLROnPlateau(monitor='acc', factor=0.5,patience=3, min_lr=1e-6, mode='max', verbose=1)
+
+# #print(train.loc[:,trainFeatures].to_numpy())
+
+# X_train = [train.loc[:, features].values[:, k] for k in range(train.loc[:, features].values.shape[1])]
+# X_test = [test.loc[:, features].values[:, k] for k in range(test.loc[:, features].values.shape[1])]
+
+# model.fit(X_train, utils.to_categorical(train.shot_made_flag.values),batch_size = 1024, epochs = 50, callbacks = [rlr])
+# values = model.predict(X_test, batch_size = 1024, callbacks = [rlr])
+
+# print(values)
