@@ -33,7 +33,7 @@ def create_model(data, catcols):
     for c in catcols:
         print(c)
         num_unique_values = int(data[c].nunique())
-        embed_dim = int(min(np.ceil((num_unique_values)/2), 70))
+        embed_dim = int(min(num_unique_values, 70))
         inp = layers.Input(shape=(1,))
         print(inp.shape)
         print(num_unique_values)
@@ -47,20 +47,20 @@ def create_model(data, catcols):
     x = layers.Concatenate()(outputs)
     x = layers.BatchNormalization()(x)
     
-    x = layers.Dense(1024, activation="relu")(x)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(512, activation="relu")(x)
+    x = layers.Dropout(0.5)(x)
     x = layers.BatchNormalization()(x)
 
-    x = layers.Dense(1024, activation="relu")(x)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(512, activation="relu")(x)
+    x = layers.Dropout(0.5)(x)
     x = layers.BatchNormalization()(x)
 
-    x = layers.Dense(1024, activation="relu")(x)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(512, activation="relu")(x)
+    x = layers.Dropout(0.4)(x)
     x = layers.BatchNormalization()(x)
     
     x = layers.Dense(512, activation="relu")(x)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dropout(0.)(x)
     x = layers.BatchNormalization()(x)
     
 
